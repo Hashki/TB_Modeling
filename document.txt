@@ -1,0 +1,197 @@
+Data storage:
+3 dimentinal array:
+stratum id, from_state_id, to_state_id
+
+1. 3 dimentional array
+Matrix = [[[0 for x in range(5)] for x in range(5)] for x in range(5)]
+M[1][1][1]=1
+2. Dictionary 
+M={}
+M[1,1,1]=1
+
+--------------------------------
+Since its sparse, I did try:
+1.Pandas dataframe sparse format:
+	doesn't work for 3 dimentional array
+
+
+Matrix = [[[0 for x in range(5)] for x in range(5)] for x in range(5)]
+# >>> Matrix[1][1][1]=1
+# >>> import pandas as pd
+# >>> df=pd.DataFrame(Matrix)
+# >>> df
+
+------------------------------------
+
+2.scipy sparse matrix:
+	doesn't work for 3 dimentional array
+
+
+#from scipy.sparse import csr_matrix
+# def _dict_to_csr(term_dict):
+#     term_dict_v = list(term_dict.itervalues())
+#     term_dict_k = list(term_dict.iterkeys())
+#     shape = list(np.repeat(np.asarray(term_dict_k).max() + 1,2))  #2,3 to be 3 dimention
+#     csr = csr_matrix((term_dict_v, zip(*term_dict_k)), shape = shape)
+#     return csr
+
+# print csr   
+
+
+----------------------------------------
+
+
+test the size of dictionary vs 3d matrix	
+
+Matrix = [[[0 for x in range(5)] for x in range(5)] for x in range(5)]
+Matrix[1][1][1]=1
+Matrix[2][2][2]=1
+Matrix[3][3][3]=1
+Matrix[4][4][4]=1
+Matrix[0][0][0]=1
+print sys.getsizeof(Matrix)
+
+
+
+term_dict={}
+term_dict[1,1,1] = 1
+term_dict[2,2,2] = 1
+term_dict[3,3,3] = 1
+term_dict[4,4,4] = 1
+term_dict[5,5,5] = 1
+print sys.getsizeof(term_dict)
+
+136
+280
+
+
+I thought the dictionary should get less memory. But size might not be the memory usage. sizeof doesn't get the correct size of the object since ot get the garbage collectors too.
+
+http://stackoverflow.com/questions/18591947/memory-cpu-complexity-tradeoffs-for-python-dict-v-list-with-large-2d-arrays
+OTOH, dictionary is implemented as hash table. So you'll only need space for elements you've inserted. If you're dealing with sparse data it's better option. Inserts have amortized cost of O(1), access is obviously O(1) also.
+
+
+
+
+----------------------------
+New solution:
+
+having a dictionary with key(from_state_id, to_state_id)
+ and value : dictionary of (stratum_ids: base values)
+
+ wihci means its a dictionary of dictionary
+
+
+example code:
+Sdict={}  ### for stratum ['1':.1,'2':.2,'3':.3]
+FTdic={}
+FTdic[175,176]=Sdict
+
+Sdict['1']=.1
+Sdict['2']=.2
+FTdic={}
+FTdic[1,2]=Sdict
+FTdic[2,3]=Sdict
+print FTdic[1,2]
+{'1': 0.1, '2': 0.2}
+print FTdic[1,2]['1']
+0.1
+
+
+here is the code to make that dictionary 
+
+con = lite.connect('/Users/halehashki/Haleh/TB/limcat-master/database/limcat-zero-index.sqlite')
+cur1 = con.cursor()
+cur2 = con.cursor()
+cur3 = con.cursor()
+
+
+from_to_state_dict={}
+TP_dict={}
+
+cur1.execute('select from_state_id from transition_probabilities group by from_state_id')
+
+for row in cur1:
+    val=row[0]
+    #print "from state" , val
+    temp=[];
+    cur2.execute('select to_state_id from transition_probabilities where from_state_id =' + str(val))
+    for row2 in cur2:
+        #print "to state" , row2[0]
+        temp.append(row2[0])
+        #print val, temp    
+        
+        stratdict={}
+        cur3.execute('SELECT DISTINCT stratum_id, base from transition_probabilities_by_stratum where from_state_id =' +str(val) + ' and to_state_id= ' + str(row2[0]) )
+        for row3 in cur3:
+            #print row3, row3[0],row3[1]
+            stratdict[row3[0]]=row3[1]
+
+            
+        TP_dict[val,row2[0]] = stratdict  
+    from_to_state_dict[val]=temp
+
+
+
+here is time to make the dictionary and sizeof value:
+dictionary making time:  16.1659390926
+size of :  49432
+
+
+----- I did test the time to get the value by having (from_state_id, to_state_id, stratum_id)  from this dictionary or directly by having a query calling database. here are the results:
+
+
+
+t = time.time()
+A=TP_dict[10,40][22016]
+print  "time to get from dictionary: ", time.time() - t, A
+
+
+
+t = time.time()
+cur3.execute('SELECT DISTINCT  base from transition_probabilities_by_stratum where from_state_id =' + str(10) + ' and to_state_id = ' + str(40) + ' and stratum_id = ' + str(22016))
+for row3 in cur3:
+    B=row3[0]
+print "time to get from database: ", time.time() - t, B
+
+
+
+
+
+time to get from dictionary:  4.05311584473e-06 99.0
+time to get from database:  0.0375361442566 99.0
+
+
+SO THE TIME TO GET DATA FROM DICTIONARY IS ALMOST 10000 TIMES FASTER. 
+
+
+-------------------------------
+
+Using 2d arraye instead of dictionar:
+like as : TP_dict[val][row2[0]] = stratdict    instead of   TP_dict[val,row2[0]] = stratdict  
+
+and then using sparse funstin in pandas:
+error: it's not working since the value are dictionaries.
+
+
+**** time to make 2d dictionary is almost the same as making dictionary
+
+----------------------
+
+sparce matrix in scipy :
+error not working. I guess its because of the values that are dictionary
+------
+
+
+Using sparse dictionart option in scipy which conver the sparse 2d matrix to sparse scipy dictionary.
+here are the size and call time:
+
+
+
+size:  49432
+time to get from dictionary:  4.19616699219e-05 99.0
+
+COMPARE TO RESULT WE GOT ABOVE, ITS FASTER TO MAKE THE DICTIONARY INSTEAD OF MAKING 2D MATRIX AND THEN CONVERT TO SOARSE DICTIONARY.
+THE SIZE BASED ON SYS.SIZEOF IS ALSO THE SAME.
+
+SO THE BEST SOLUTION IS USING DICTIONARY OF DICTIONARY
