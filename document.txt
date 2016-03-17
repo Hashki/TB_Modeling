@@ -194,4 +194,472 @@ time to get from dictionary:  4.19616699219e-05 99.0
 COMPARE TO RESULT WE GOT ABOVE, ITS FASTER TO MAKE THE DICTIONARY INSTEAD OF MAKING 2D MATRIX AND THEN CONVERT TO SOARSE DICTIONARY.
 THE SIZE BASED ON SYS.SIZEOF IS ALSO THE SAME.
 
-SO THE BEST SOLUTION IS USING DICTIONARY OF DICTIONARY
+SO THE BEST SOLUTION IS USING DICTIONARY OF DICTION
+
+
+
+_____________________________
+Increasing the age by cycle duration and adjesting the age group:
+
+1. I did make a hash table where the keys are age(year wise) as integer and values are age-group as string
+    in each cycle I increase the age by cycle duration (age + duration/12) which is a float number.
+    To check wether this new age is fill in any of age group or not, since its comparision betwoeen interger and flost
+     1.the dictonary.get(key) is not working.
+     2. if a in b : is not working
+     3. if abs(a-b)< 0.001  : is wroking but its so costly and decraes the speed : #cycle * #people checkup
+
+Solution:
+The key and the value to comapare with the key have to be both integer, so I convert the age as year to age as month. then each cycle duration I am adding (1, 2 months) instead of (1/12 of year).      
+
+
+run timr for 
+ if a in dictionary.keys()
+
+real    0m3.936s
+user    0m2.564s
+sys 0m1.340s
+
+
+dictionary.get(key) !=None
+
+# if Age_Group_Dict.get(pi.age) != None:
+    #   pi.age_group =  Age_Group_Dict[pi.age]
+
+real    0m3.966s
+user    0m2.610s
+sys 0m1.355s
+
+
+Looks like very close for 500 people in 62 cycle
+BUT I COOSE THE FORST ONE WHICH IS SLOWER
+____________________________
+Run time
+python vs cython
+python 
+
+real	0m43.202s
+user	0m10.778s
+sys	0m6.983s
+
+
+
+Haleh:TB_Modeling>time cython test.py 
+
+real	0m2.736s
+user	0m0.440s
+sys	0m0.161s
+
+-----------------------------------------------
+Intervention
+
+from state 0(uninitialized) --> to 4 states(1,2,3,30)(Fast latent, Slow latent, Uninfected TB, LTBI treatment with INH 6m)
+There is no record in table "transition_by_stratum_name" from any of these states(1,2,3,30) to other states.
+
+These states are the states that the intervention criteria is applied:
+
+
+2203: if chain.Name == "TB disease and treatment" && !isInitializationPhase {
+
+        // they need to be in either fast latent, slow latent, or uninfected to qualify for testing
+        if currentStateInThisChain.Name == "Slow latent" ||
+            currentStateInThisChain.Name == "Fast latent" ||
+            currentStateInThisChain.Name == "Uninfected TB" {
+
+
+
+It mean swhen the person state is any of these above, its eligable for intervention and intervention starts.
+
+??? If that person is not randomly assigned for intervention, means gone stay there(in this state) for ever??          
+
+
+Since there is no TP beteen intervention states in table, the transition probability is assigned here in the code:
+The transition probability of going from any of the states in TT is the same and constant of .95.
+
+here is the code:
+
+2388: 
+// they were assigned a testing group
+            if person.TestingGroupId != 0 {
+                testing_group := Inputs.Interventions[InterventionId].Testing_groups[person.TestingGroupId-1]
+                if cycle.Id < testing_group.End_cycle && cycle.Id >= testing_group.Begin_cycle {
+                    // determine test for this test group
+                    testing_choice_neg_id := Query.getStateByName(testing_group.Test_choice_neg).Id
+                    testing_choice_pos_id := Query.getStateByName(testing_group.Test_choice_pos).Id
+
+                    if transitionProbability.To_state_id == testing_choice_neg_id || transitionProbability.To_state_id == testing_choice_pos_id {
+                        transitionProbabilities[i].Tp_base = 0.95
+                    } else {
+                        transitionProbabilities[i].Tp_base = 0
+                    }
+                }
+            } else {
+                //they were not assigned a testing group
+                transitionProbabilities[i].Tp_base = 0
+            }
+
+"TestingGroupId " is intervention id **
+
+How initially we assig peoples different testing group based on input intervention file???
+
+                   
+
+??? probability of .95 means  there is .05 percent chance that this person don't go to next step( for example: next month os taking antibiotic). What is happening to this person. 1. stays here long enough until b goes to nest step? Doesn't this riune the sequence od test and treatment.
+2. it goes out of intervention and goes back to initial states, e.g. slow latent?
+
+
+
+
+
+
+TREATMENT
+   --------------------
+
+ 2483:   // ---------------- Treatment
+    // now that transitions to treatment is a stratified TP, these adjustments
+    // need to come after the stratifed variables are pulled
+    for i, transitionProbability := range transitionProbabilities {
+        if !isInitializationPhase &&
+            (transitionProbability.To_state_id == LBTI_9M_INH ||
+                transitionProbability.To_state_id == LTBI_6M_INH ||
+                transitionProbability.To_state_id == LTBI_RIF ||
+                transitionProbability.To_state_id == LTBI_RTP ||
+                transitionProbability.To_state_id == FP_LBTI_9M_INH ||
+                transitionProbability.To_state_id == FP_LTBI_6M_INH ||
+                transitionProbability.To_state_id == FP_LTBI_RIF ||
+                transitionProbability.To_state_id == FP_LTBI_RTP) {
+
+            if person.TestingGroupId == 0 && currentStateInThisChain.Name != "Uninitialized" {
+                
+            }
+
+            if person.TestingGroupId != 0 {
+
+                // fmt.Println("person ", person.Id, " has id of ", person.TestingGroupId)
+                // os.Exit(1)
+                // fmt.Println("No testing group; how are you treated without testing")
+                // os.Exit(1)
+                testing_group := Inputs.Interventions[InterventionId].Testing_groups[person.TestingGroupId-1]
+
+                // determine treatment for this test group
+                treatment_choice_neg_id := Query.getStateByName(testing_group.Treatment_choice_neg).Id
+                treatment_choice_pos_id := Query.getStateByName(testing_group.Treatment_choice_pos).Id
+
+                if transitionProbability.To_state_id == treatment_choice_neg_id ||
+                    transitionProbability.To_state_id == treatment_choice_pos_id {
+                    // do nothing     ??????? IS THAT BECAUSE THAT IS THE SAME .95 IS SET FOR TESTING   WHERE THIS TP IS SET THEN?
+                } else {
+                    transitionProbabilities[i].Tp_base = 0
+                }
+
+            } else {
+                transitionProbabilities[i].Tp_base = 0
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
+@@@@@@@@@@@ moheme negah konam
+
+3016: // ---------------- active case finding ---------------------
+
+
+    // CDPH finds ~10 contacts per active case
+    // 25% of them have LTBI
+    // and 75% of those are recent transmissions
+
+    if cycle.Id > 1 {
+
+        number_of_fast_latents_identified_per_active_case := 10.0 * 0.25 * 0.75
+        number_of_slow_latents_identified_per_active_case := 10.0 * 0.25 * 0.25
+
+        number_of_active_cases_last_cycle := float64(Query.Total_active_by_cycle[cycle.Id-1])
+
+        total_fast_latents_identified := number_of_fast_latents_identified_per_active_case * number_of_active_cases_last_cycle
+        total_slow_latents_identified := number_of_slow_latents_identified_per_active_case * number_of_active_cases_last_cycle
+
+        chance_fast_latent := total_fast_latents_identified / float64(Query.State_populations_by_cycle[cycle.Id-1][FAST_LATENT_ID])
+        chance_slow_latent := total_slow_latents_identified / float64(Query.State_populations_by_cycle[cycle.Id-1][SLOW_LATENT_ID])
+
+        if uint(currentStateInThisChain.Id) == SLOW_LATENT_ID {
+            // assume CDPH uses testing group Id of 0th intervention
+            if random < chance_slow_latent {
+                new_state = Query.getStateByName(Inputs.Interventions[0].Testing_groups[1].Test_choice_pos)
+                Inputs.People[person.Id].TestingGroupId = 1
+            }
+
+        }
+        if uint(currentStateInThisChain.Id) == FAST_LATENT_ID {
+            // assume CDPH uses testing group Id of 0th intervention
+            if random < chance_fast_latent {
+                new_state = Query.getStateByName(Inputs.Interventions[0].Testing_groups[1].Test_choice_pos)
+                Inputs.People[person.Id].TestingGroupId = 1
+            }
+        }
+    }
+
+
+
+    ****????????????????? Does here the intervention is been setup or ???? Because testingGroupId is set to 1.
+    where testinggroupid is set initially?
+
+
+
+------ Life expectancy and dead
+
+
+
+
+
+-----------------
+2348 // TO DO Recent transmission --------------!!!!!!!!!!!!!!!!
+
+        // ----------- Recent transmmission -------------
+        // Increase risk of progression for those with recent infection
+
+        if transitionProbabilities[i].To_state_id == Query.getStateByName("Active - untreated").Id && !isInitializationPhase &&
+            currentStateInThisChain.Name != "Death" &&
+            currentStateInThisChain.Name != "Active - untreated" &&
+            currentStateInThisChain.Name != "Active Treated Month 1" &&
+            currentStateInThisChain.Name != "Active Treated Month 2" &&
+            currentStateInThisChain.Name != "Active Treated Month 3" &&
+            currentStateInThisChain.Name != "Active Treated Month 4" &&
+            currentStateInThisChain.Name != "Active Treated Month 5" &&
+            currentStateInThisChain.Name != "Active Treated Month 6" &&
+            currentStateInThisChain.Name != "Default" &&
+            currentStateInThisChain.Name != "Former active TB" &&
+            currentStateInThisChain.Name != "LTBI treated with INH 9m" &&
+            currentStateInThisChain.Name != "LTBI treated with INH 6m" &&
+            currentStateInThisChain.Name != "LTBI treated with RIF" &&
+            currentStateInThisChain.Name != "LTBI treated with RTP" {
+            if person.MonthsSinceTBInfection < 36 {  ****************
+                // fmt.Println("person has ", person.MonthsSinceTBInfection, " months of infection. Adjusting TP by ", RecentInfectionAdjustment)
+                transitionProbabilities[i].Tp_base = transitionProbabilities[i].Tp_base * RecentInfectionAdjustment
+            }
+        }
+
+
+??????? Is that:
+going to "Active - untreated" from states except these 14 staes.
+
+
+2411: if transitionProbability.Is_dynamic {
+
+There are four records where transition probability is dynamic:
+
+select  * from transition_probabilities where is_dynamic=1
+
+"Uninfected TB" -> "Fast latent"
+"No close contacts" -> "Close contacts"
+"Close contacts" ->   "No close contacts"
+"Uninfected HIV"  ->  "Infected HIV, no ART"
+
+
+refrenece to code:
+2417:
+switch funcName {
+
+            case "TB trans to fast latent":
+                birthplace_state_id := Query.Master_record_current_cycle_by_person_and_chain[person.Id][BIRTHPLACE_CHAIN_ID].State_id
+                race_state_id := Query.Master_record_current_cycle_by_person_and_chain[person.Id][RACE_CHAIN_ID].State_id
+                riskOfInfection = Query.LTBI_risk_by_cycle_birthplace_and_race[cycle.Id][birthplace_state_id][race_state_id]
+                transitionProbabilities[i].Tp_base = riskOfInfection // all go to fast latent
+
+            case "TB trans to slow latent":
+
+                transitionProbabilities[i].Tp_base = 0 // all go to fast latent
+
+            }
+
+
+??? "TB trans to slow latent"  is not defined as dynamic in the table (( its not been set in the code too)). Shouls we consider it?
+??? the other three transmission is not considered in the code. Shuld we consider those as transmission events?
+
+
+reference to code:
+2417:
+for going to fast latent, the TP is adjusted as:
+
+    birthplace_state_id := Query.Master_record_current_cycle_by_person_and_chain[person.Id][BIRTHPLACE_CHAIN_ID].State_id
+    race_state_id := Query.Master_record_current_cycle_by_person_and_chain[person.Id][RACE_CHAIN_ID].State_id
+    riskOfInfection = Query.LTBI_risk_by_cycle_birthplace_and_race[cycle.Id][birthplace_state_id][race_state_id]
+    transitionProbabilities[i].Tp_base = riskOfInfection // all go to fast latent
+
+
+riskOfInfection = risk
+risk is been calculated as 
+1643: risk := (float64(numActive)/float64(numSus)*0.8 + generalPopulationRisk) * NumberOfLtbiCasesCausedByOneActiveCase.Value
+
+
+?? NumberOfLtbiCasesCausedByOneActiveCase 
+???? I only found it as varivle in variables.go where its kind of databse setting. WHat is this values definition and how its been calculated?
+
+
+
+**** select  * from transition_probabilities_by_stratum where from_state_id=1
+result is 0 row, it means there is no other to_state for 'Uninfected TB' to go instead of Fast latent forced by dynamic transmission
+
+
+
+------------------------ Interaction
+   Table Interactions:
+   There are 27 states that if the person is in, then the interaction will apply :
+   select  distinct from_state_id , name from interactions inner join states where  interactions.from_state_id = states.id
+
+   And those are:
+   slow latent, fat latent, LTBI 9 month INH(all nine states), LTBI 6 month INH(all 6 states), LTBI RIF, LTBI RTP, No TNF_alpha, No ESRD, life
+
+In_state_id : or to attributes id (its how I call them) are 20 states/attributes that a person can have:
+ 
+
+"Homeless"
+"ESRD"
+"TNF-alpha"
+"Alcohol"
+"Age 35-39"
+"Age 40-44"
+"Age 45-49"
+"Age 50-54"
+"Age 55-59"
+"Age 60-64"
+"Age 65-69"
+"Age 70-74"
+"Age 75-79"
+"Age 80+"
+"Diabetes"
+"Infected HIV, no ART"
+"Infected HIV, ART"
+"Transplant patient"
+"IDU"
+
+
+692 : func adjust_transitions(
+
+706: tp.Tp_base = tp.Tp_base * adjustmentFactor      //// adjustmentFactor is in Interaction table, so if interaction then TP=TP (from TP table) * Adjustment (from Interaction table)
+
+
+
+???? If some one is eligibale for both Intervention and Interaction, what TP would be?? Because for Treatment the TP is .95 but for Interaction is TP*Adjustment. So which one is prioprity?
+
+    
+*** 2274 
+there are hard coded adjustment for "Race" and "diabetes" and "sex for not usborn"
+Race is not in the interaction table, but diebetes is, so which one should be the tp adjustment? the one used above or this one?
+
+Can we add the "race" to interaction table too? is there a reason that they ar enot there? 
+
+
+
+
+
+there are 20 interaction states. Here is my calcultion, I didn't run two different programs implemented.
+1. If I check the new state for each person at each cycle, and if its any of thses 20 set the "interaction=yes" in person class, that would search on 20 elements:
+([1, 2, 3, 4]
+>>> 1 in A
+True
+>>> if (1 in A):. 
+not sure but I think the cost of "in" is 1.
+
+and at each cycle for each person have to check "if person. interaction == yes" 
+
+
+2. If at each cycle for each person check where its state is any of these 20 states ( check of 20) then do the interaction.
+
+
+I think both have same cost. In forst one in loop for each person, we check it first, in second one we check it in next cycle.
+
+
+
+
+
+For interaction there are three keys(in_state_id, from_state_id, to_state_id) . In_state_id are the risk factors, those in  Interaction table.
+
+
+Based on the TB states image, a person have a chance to go from ‘uninitialized’ state to any of risk factor states: “initialization_diagrams” folder contain the image and TPs.
+
+But in the “transition_by_stratum” table there is no transition from “Uninitialized” to these risk factor states.
+
+So the only way that this risk factors is been setup for each random person is when its been initialized. Based on “stratum_type_table” rows 4,5,6,8 have these risk factors in their stratum type.
+
+??So come back to the original question that how we stratify or set these states for initialize person??
+
+
+
+
+
+----------------------------- 
+Adjustment
+
+For interaction:
+Tp*adjustment value from interaction table
+
+for Intervention:
+TB TT states: .95
+
+For Transmission :
+TP * RecentInfectionAdjustment  ??? This value is not been set in the program, what is this
+
+
+
+
+----------------------------
+
+
+3087 // ---------- adjust months since TB infection ------------
+mohem negah konam va cod ekonam
+where this value is used for?
+
+Is been only used for line : 2368  for transmission adjustment
+if person.MonthsSinceTBInfection < 36 {
+
+
+***** mohem 
+another check for fast laten
+if tbStateName == "Fast latent" && person.MonthsSinceTBInfection > 35 {
+            new_state = Query.getStateByName("Slow latent")
+        }
+
+------------------------------------------------------------------
+
+Years_in_us  in table “base_init_line”  and “Length of time in US”. I couldn't find any where in code where these values are used, except that they have rename fr0m “Years_in_us” to “Length of time in US”
+
+
+Reference to code: 3082
+if lotStateName == "5 or less years" && person.YearsInUs > 5 {
+            new_state = Query.getStateByName("More than 5 years")
+Set the person state attribute if its been more than 5 years here
+
+Inputs.People[i].YearsInUs = Inputs.People[i].YearsInUs + (1.0 / 12.0)
+
+if lotStateName == "5 or less years" {
+            person.YearsInUs = 0
+        } else {
+            person.YearsInUs = 6
+        }
+
+
+?? why we need them? How they affect the modeling?
+
+
+
+class person():
+    def __init__(self):
+        self.sex   = ''
+        self.race  = ''
+        self.age_group  = ''
+        self.citizen=''
+        self.years_in_us=''
+        self.birthplace=''
+        self.state=[]
+        self.Stratum_id=0
+        self.InterventionId=0
+        Self.Interaction=T
+        self.riskfactor()    ### i think person can only go to these states from "uniniliazed" state. in the first cycle
+
+

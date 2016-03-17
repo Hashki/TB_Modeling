@@ -96,7 +96,7 @@ for row in cur1:
 # print "dictionary making time: ",   time.time() - t
 # print "size of : ", sys.getsizeof(TP_dict)
 
-# print TP_dict[10,40]
+print TP_dict[10,40]
 # print "----------------------------------"
 
 
@@ -142,27 +142,3 @@ for row in cur1:
 
 
 
-# df=pd.DataFrame(H)
-# sdf = df.to_sparse()
-# sdf=df.to_sparse(fill_value=0)
-# df.fillna(0).to_sparse(fill_value=0)
-# sparse_matrix = scipy.sparse.csr_matrix(Matrix)
-# sparse_matrix = scipy.sparse.csr_matrix(df)
-
-
-# term_dict={}
-# term_dict[0][0][0]=1
-# term_dict[1][0][0]=1
-# term_dict[1][1][0]=1
-# term_dict[2][2][2]=1
-
-
-
-
-# from scipy.sparse import csr_matrix
-# def _dict_to_csr(term_dict):
-#     term_dict_v = list(term_dict.itervalues())
-#     term_dict_k = list(term_dict.iterkeys())
-#     shape = list(repeat(np.asarray(term_dict_k).max() + 1,2))
-#     csr = csr_matrix((term_dict_v, zip(*term_dict_k)), shape = shape)
-#     return csr
